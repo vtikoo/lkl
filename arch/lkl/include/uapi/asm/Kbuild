@@ -4,6 +4,7 @@ generic-y += elf.h
 generic-y += kvm_para.h
 generic-y += shmparam.h
 generic-y += timex.h
+generic-y += sigcontext.h
 
 # no header-y since we need special user headers handling
 # see arch/lkl/script/headers.py

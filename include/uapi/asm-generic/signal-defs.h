@@ -15,8 +15,15 @@
 #endif
 
 #ifndef __ASSEMBLY__
+#ifdef CONFIG_LKL
+/* address overhead of setting up rt stack frame in LKL */
+/* removes the overhead of adding arch dependent code */
+typedef void __signalfn_t(int, void*, void*);
+typedef __signalfn_t __user *__sighandler_t;
+#else
 typedef void __signalfn_t(int);
 typedef __signalfn_t __user *__sighandler_t;
+#endif //CONFIG_LKL
 
 typedef void __restorefn_t(void);
 typedef __restorefn_t __user *__sigrestore_t;

@@ -10,6 +10,9 @@ struct lkl_jmp_buf {
 	unsigned long buf[128];
 };
 
+struct siginfo;
+struct ucontext;
+
 /**
  * lkl_host_operations - host operations used by the Linux kernel
  *
@@ -148,5 +151,8 @@ int lkl_is_running(void);
 
 int lkl_printf(const char *, ...);
 void lkl_bug(const char *, ...);
+
+void lkl_do_trap(int trapnr, int signr, char *str, struct ucontext *uctx,
+		 long error_code, struct siginfo *info);
 
 #endif
