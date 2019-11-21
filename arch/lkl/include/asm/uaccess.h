@@ -1,6 +1,20 @@
 #ifndef _ASM_LKL_UACCESS_H
 #define _ASM_LKL_UACCESS_H
 
+/* Platform should implement lkl_access_check to override the default behaviour */
+extern int __attribute__((weak)) lkl_access_ok(unsigned long addr, unsigned long size);
+
+#define __access_ok(addr,size)  __lkl_access_ok(addr, size)
+
+static inline int __lkl_access_ok(unsigned long addr, unsigned long size)
+{
+    int ret = 1; /* Default is ok*/
+
+    /* Application specfic access_check is invoked if defined. */
+    if ( lkl_access_ok ) ret = lkl_access_ok(addr, size);
+    return ret;
+}
+
 /* copied from old include/asm-generic/uaccess.h */
 static inline __must_check long raw_copy_from_user(void *to,
 		const void __user *from, unsigned long n)
