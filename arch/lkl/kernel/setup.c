@@ -6,6 +6,7 @@
 #include <linux/fs.h>
 #include <linux/start_kernel.h>
 #include <linux/syscalls.h>
+#include <linux/platform_device.h>
 #include <linux/tick.h>
 #include <asm/host_ops.h>
 #include <asm/irq.h>
@@ -19,6 +20,16 @@ static void *init_sem;
 static int is_running;
 void (*pm_power_off)(void) = NULL;
 static unsigned long mem_size = 64 * 1024 * 1024;
+
+/* Default DMA mask, this will be updated during initialization */
+static u64 _lkl_dma_mask = 0xffffffffUL;
+
+/* Assign memory for dma_mask. Overide weak interface defined
+ * in the base platfrom driver */
+void arch_setup_pdev_archdata(struct platform_device *pdev)
+{
+    pdev->dev.dma_mask = &_lkl_dma_mask;
+}
 
 long lkl_panic_blink(int state)
 {

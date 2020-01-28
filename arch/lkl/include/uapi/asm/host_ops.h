@@ -155,4 +155,10 @@ void lkl_bug(const char *, ...);
 void lkl_do_trap(int trapnr, int signr, char *str, struct ucontext *uctx,
 		 long error_code, struct siginfo *info);
 
+/* lkl_initialize_swiotlb - setup the bounce buffer for LKL.
+ * Application using LKL allocates memory and pass to LKL for setting up
+ * bounce buffer. The memory used as bounce buffer should be deallocated
+ * or released once LKL is shutdown */
+int lkl_initialize_swiotlb(void *ptr, unsigned long size);
+
 #endif

@@ -77,6 +77,11 @@ config HAVE_UNDERSCORE_SYMBOL_PREFIX
        help
          Some architectures generate an _ in front of C symbols; things like
          module loading and assembly files need to know about this.
+config SWIOTLB
+       def_bool y
+
+config IOMMU_HELPER
+       def_bool y
 
 config HZ
         int
