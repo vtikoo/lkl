@@ -8,6 +8,7 @@
 #include <linux/syscalls.h>
 #include <linux/platform_device.h>
 #include <linux/tick.h>
+#include <linux/virtio_console.h>
 #include <asm/host_ops.h>
 #include <asm/irq.h>
 #include <asm/unistd.h>
@@ -20,6 +21,20 @@ static void *init_sem;
 static int is_running;
 void (*pm_power_off)(void) = NULL;
 static unsigned long mem_size = 64 * 1024 * 1024;
+
+#ifdef CONFIG_VIRTIO_CONSOLE
+/* In the early stage of bootup when virtio console driver is not ready
+ * then arch needs to provide a mechanism for printing the early console
+ * messages. LKL will use the print (callback) registered during bootup.
+ * Check description of print cb provided by host for detailed information
+ */
+static int lkl_early_put_chars(u32 vtermno, const char *buf, int count)
+{
+	if (lkl_ops->print)
+		lkl_ops->print(buf, count);
+	return 0;
+}
+#endif
 
 /* Default DMA mask, this will be updated during initialization */
 static u64 _lkl_dma_mask = 0xffffffffUL;
@@ -84,6 +99,10 @@ int __init lkl_start_kernel(struct lkl_host_operations *ops,
 	ret = lkl_cpu_init();
 	if (ret)
 		goto out_free_init_sem;
+
+#ifdef CONFIG_VIRTIO_CONSOLE
+	virtio_cons_early_init(lkl_early_put_chars);
+#endif
 
 	ret = lkl_ops->thread_create(lkl_run_kernel, NULL);
 	if (!ret) {
