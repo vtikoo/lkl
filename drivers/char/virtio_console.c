@@ -1221,7 +1221,7 @@ static const struct hv_ops hv_ops = {
 int __init virtio_cons_early_init(int (*put_chars)(u32, const char *, int))
 {
 	early_put_chars = put_chars;
-	return hvc_instantiate(0, 0, &hv_ops);
+	return hvc_instantiate(1, 0, &hv_ops);
 }
 
 static int init_port_console(struct port *port)
