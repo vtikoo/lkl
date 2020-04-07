@@ -50,6 +50,18 @@ static long run_syscall(long no, long *params)
 	return ret;
 }
 
+syscall_handler_t lkl_replace_syscall(int no, syscall_handler_t replacement)
+{
+	syscall_handler_t old;
+
+	if (no < 0 || no >= __NR_syscalls)
+		return NULL;
+
+	old = syscall_table[no];
+	syscall_table[no] = replacement;
+
+	return old;
+}
 
 #define CLONE_FLAGS (CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_THREAD |	\
 		     CLONE_SIGHAND | SIGCHLD)

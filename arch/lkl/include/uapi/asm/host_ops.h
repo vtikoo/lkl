@@ -161,4 +161,13 @@ void lkl_do_trap(int trapnr, int signr, char *str, struct ucontext *uctx,
  * or released once LKL is shutdown */
 int lkl_initialize_swiotlb(void *ptr, unsigned long size);
 
+/* Type for system calls. */
+typedef long (*syscall_handler_t)(long arg1, ...);
+
+/* Hook to allow LKL users to replace specific system calls.  The old system
+ * call implementation is returned.  If `no` is out of range, `NULL` is
+ * returned. */
+syscall_handler_t lkl_replace_syscall(int no, syscall_handler_t replacement);
+
+
 #endif
