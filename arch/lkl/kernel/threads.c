@@ -6,8 +6,12 @@
 #include <asm/cpu.h>
 #include <asm/sched.h>
 
+extern _Atomic(bool) lkl_shutdown;
+
 static int init_ti(struct thread_info *ti)
 {
+	LKL_TRACE("enter\n");
+
 	ti->sched_sem = lkl_ops->sem_alloc(0);
 	if (!ti->sched_sem)
 		return -ENOMEM;
@@ -22,6 +26,8 @@ static int init_ti(struct thread_info *ti)
 unsigned long *alloc_thread_stack_node(struct task_struct *task, int node)
 {
 	struct thread_info *ti;
+
+	LKL_TRACE("enter (task=%s node=%i)\n", task->comm, node);
 
 	ti = kmalloc(sizeof(*ti), GFP_KERNEL);
 	if (!ti)
@@ -46,6 +52,8 @@ void setup_thread_stack(struct task_struct *p, struct task_struct *org)
 	struct thread_info *ti = task_thread_info(p);
 	struct thread_info *org_ti = task_thread_info(org);
 
+	LKL_TRACE("enter\n");
+
 	ti->flags = org_ti->flags;
 	ti->preempt_count = org_ti->preempt_count;
 	ti->addr_limit = org_ti->addr_limit;
@@ -53,18 +61,61 @@ void setup_thread_stack(struct task_struct *p, struct task_struct *org)
 
 static void kill_thread(struct thread_info *ti)
 {
+	struct task_struct *task = ti->task;
+
+	LKL_TRACE("enter (task=%s task->state=%i task->flags=%i"
+		  "ti=%p ti->flags=%i ti->TIF_NO_TERMINATION=%i )\n",
+		  task->comm, task->state, task->flags, ti, ti->flags,
+		  test_ti_thread_flag(ti, TIF_NO_TERMINATION));
+
+	/* Check if we are killing an applicaton thread */
 	if (!test_ti_thread_flag(ti, TIF_HOST_THREAD)) {
 		ti->dead = true;
 		lkl_ops->sem_up(ti->sched_sem);
 		lkl_ops->thread_join(ti->tid);
+	} else {
+
+		/*
+		 * Check if the host thread was killed due to its deallocation when
+		 * the associated application thread terminated gracefully. If not,
+		 * the thread has terminated due to a SYS_exit or a signal. In this
+		 * case, we need to notify the host to initiate an LKL shutdown.
+		 */
+		if (!test_ti_thread_flag(ti, TIF_NO_TERMINATION)) {
+			int exit_code = task->exit_code;
+			int exit_status = exit_code >> 8;
+			int received_signal = exit_code & 255;
+			int exit_signal = task->exit_signal;
+
+			LKL_TRACE(
+				"terminating LKL (exit_state=%i exit_code=%i exit_signal=%i exit_status=%i "
+				"received_signal=%i ti->dead=%i task->pid=%i "
+				"task->tgid=%i ti->TIF_SCHED_JB=%i ti->TIF_SIGPENDING=%i)\n",
+				task->exit_state, exit_code, exit_signal,
+				exit_status, received_signal, ti->dead,
+				task->pid, task->tgid,
+				test_ti_thread_flag(ti, TIF_SCHED_JB),
+				test_ti_thread_flag(ti, TIF_SIGPENDING));
+
+			lkl_shutdown = true;
+
+			/* Notify the LKL host to shut down */
+			lkl_ops->terminate(exit_status, received_signal);
+		}
+
+		ti->dead = true;
 	}
 	lkl_ops->sem_free(ti->sched_sem);
-
 }
 
 void free_thread_stack(struct task_struct *tsk)
 {
 	struct thread_info *ti = task_thread_info(tsk);
+
+	LKL_TRACE(
+		"enter (task=%s task->TIF_HOST_THREAD=%i task->TIF_SIGPENDING=%i ti=%p current=%s)\n",
+		tsk->comm, test_tsk_thread_flag(tsk, TIF_HOST_THREAD),
+		test_tsk_thread_flag(tsk, TIF_SIGPENDING), ti, current->comm);
 
 	kill_thread(ti);
 	kfree(ti);
@@ -91,6 +142,8 @@ struct task_struct *__switch_to(struct task_struct *prev,
 	struct thread_info *_next = task_thread_info(next);
 	unsigned long _prev_flags = _prev->flags;
 	struct lkl_jmp_buf _prev_jb;
+
+	LKL_TRACE("%s=>%s\n", prev->comm, next->comm);
 
 	_current_thread_info = task_thread_info(next);
 	_next->prev_sched = prev;
@@ -120,11 +173,18 @@ struct task_struct *__switch_to(struct task_struct *prev,
 
 int host_task_stub(void *unused)
 {
+	LKL_TRACE("enter\n");
 	return 0;
 }
 
 void switch_to_host_task(struct task_struct *task)
 {
+	LKL_TRACE(
+		"enter (task=%s current=%s task->TIF_HOST_THREAD=%i task->TIF_SIGPENDING=%i)\n",
+		task->comm, current->comm,
+		test_tsk_thread_flag(task, TIF_HOST_THREAD),
+		test_tsk_thread_flag(task, TIF_SIGPENDING));
+
 	if (WARN_ON(!test_tsk_thread_flag(task, TIF_HOST_THREAD)))
 		return;
 
@@ -135,8 +195,24 @@ void switch_to_host_task(struct task_struct *task)
 
 	wake_up_process(task);
 	thread_sched_jb();
+
+	LKL_TRACE(
+		"calling sem_down (task=%s task->TIF_HOST_THREAD=%i task->TIF_SIGPENDING=%i)\n",
+		task->comm, test_tsk_thread_flag(task, TIF_HOST_THREAD),
+		test_tsk_thread_flag(task, TIF_SIGPENDING));
 	lkl_ops->sem_down(task_thread_info(task)->sched_sem);
+
+	LKL_TRACE(
+		"calling schedule_tail (task=%s task->TIF_HOST_THREAD=%i task->TIF_SIGPENDING=%i abs_prev=%s)\n",
+		task->comm, test_tsk_thread_flag(task, TIF_HOST_THREAD),
+		test_tsk_thread_flag(task, TIF_SIGPENDING), abs_prev->comm);
 	schedule_tail(abs_prev);
+
+	LKL_TRACE(
+		"done (task=%s current=%s task->TIF_HOST_THREAD=%i task->TIF_SIGPENDING=%i)\n",
+		task->comm, current->comm,
+		test_tsk_thread_flag(task, TIF_HOST_THREAD),
+		test_tsk_thread_flag(task, TIF_SIGPENDING));
 }
 
 struct thread_bootstrap_arg {
@@ -147,6 +223,8 @@ struct thread_bootstrap_arg {
 
 static void thread_bootstrap(void *_tba)
 {
+	LKL_TRACE("enter\n");
+
 	struct thread_bootstrap_arg *tba = (struct thread_bootstrap_arg *)_tba;
 	struct thread_info *ti = tba->ti;
 	int (*f)(void *) = tba->f;
@@ -164,6 +242,8 @@ static void thread_bootstrap(void *_tba)
 int copy_thread(unsigned long clone_flags, unsigned long esp,
 		unsigned long unused, struct task_struct *p)
 {
+	LKL_TRACE("enter\n");
+
 	struct thread_info *ti = task_thread_info(p);
 	struct thread_bootstrap_arg *tba;
 
@@ -191,6 +271,7 @@ int copy_thread(unsigned long clone_flags, unsigned long esp,
 
 void show_stack(struct task_struct *task, unsigned long *esp)
 {
+	LKL_TRACE("enter\n");
 }
 
 /**
@@ -202,9 +283,12 @@ void threads_init(void)
 	int ret;
 	struct thread_info *ti = &init_thread_union.thread_info;
 
+	LKL_TRACE("enter\n");
+
 	ret = init_ti(ti);
-	if (ret < 0)
-		lkl_printf("lkl: failed to allocate init schedule semaphore\n");
+	if (ret < 0) {
+		lkl_printf("lkl: failed to allocate thread_info struct\n");
+	}
 
 	ti->tid = lkl_ops->thread_self();
 }
@@ -212,6 +296,8 @@ void threads_init(void)
 void threads_cleanup(void)
 {
 	struct task_struct *p, *t;
+
+	LKL_TRACE("enter\n");
 
 	for_each_process_thread(p, t) {
 		struct thread_info *ti = task_thread_info(t);

@@ -12,7 +12,8 @@ static inline void thread_sched_jb(void)
 		lkl_ops->jmp_buf_set(&current_thread_info()->sched_jb,
 				     schedule);
 	} else {
-		lkl_bug("thread_sched_jb() can be used only for host task");
+		lkl_bug("thread_sched_jb() can be used only for host task (current_thread_info()=%p current_thread_info()->flags=%i)\n",
+			current_thread_info(), current_thread_info()->flags);
 	}
 }
 

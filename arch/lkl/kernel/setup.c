@@ -115,6 +115,9 @@ int __init lkl_start_kernel(struct lkl_host_operations *ops,
 	current_thread_info()->tid = lkl_ops->thread_self();
 	lkl_cpu_change_owner(current_thread_info()->tid);
 
+	/* Create parent host task for system calls with new pid */
+	host0_init();
+
 	lkl_cpu_put();
 	is_running = 1;
 
@@ -153,8 +156,10 @@ long lkl_sys_halt(void)
 		LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_RESTART, };
 
 	err = lkl_syscall(__NR_reboot, params);
-	if (err < 0)
+	if (err < 0) {
+		LKL_TRACE("sys_reboot failed (err=%i)\n", err);
 		return err;
+	}
 
 	is_running = false;
 

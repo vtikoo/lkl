@@ -1,6 +1,21 @@
 #ifndef _ASM_UAPI_LKL_HOST_OPS_H
 #define _ASM_UAPI_LKL_HOST_OPS_H
 
+/*
+ * LKL will trace all threading and scheduling operations if compiled
+ * with LKL_DEBUG defined.
+ */
+
+#ifdef LKL_DEBUG
+#define LKL_TRACE(x, ...) \
+    lkl_printf("[[    LKL   ]] %s(): " x, __func__, ##__VA_ARGS__);
+#else
+#define LKL_TRACE(...) \
+    do                 \
+    {                  \
+    } while (0)
+#endif
+
 /* Defined in {posix,nt}-host.c */
 struct lkl_mutex;
 struct lkl_sem;
@@ -26,6 +41,7 @@ struct ucontext;
  * @print - optional operation that receives console messages
  *
  * @panic - called during a kernel panic
+ * @terminate - shutdown the kernel, returning an exit status and received signal
  *
  * @sem_alloc - allocate a host semaphore an initialize it to count
  * @sem_free - free a host semaphore
@@ -90,6 +106,7 @@ struct lkl_host_operations {
 
 	void (*print)(const char *str, int len);
 	void (*panic)(void);
+	void (*terminate)(int exit_status, int received_signal);
 
 	struct lkl_sem* (*sem_alloc)(int count);
 	void (*sem_free)(struct lkl_sem *sem);

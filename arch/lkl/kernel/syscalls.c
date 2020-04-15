@@ -44,9 +44,6 @@ static long run_syscall(long no, long *params)
 	ret = syscall_table[no](params[0], params[1], params[2], params[3],
 				params[4], params[5]);
 
-	task_work_run();
-	do_signal(NULL);
-
 	return ret;
 }
 
@@ -76,8 +73,10 @@ static int new_host_task(struct task_struct **task)
 	switch_to_host_task(host0);
 
 	pid = kernel_thread(host_task_stub, NULL, CLONE_FLAGS);
-	if (pid < 0)
+	if (pid < 0) {
+		LKL_TRACE("kernel_thread() failed (pid=%i)\n", pid);
 		return pid;
+	}
 
 	rcu_read_lock();
 	*task = find_task_by_pid_ns(pid, &init_pid_ns);
@@ -87,10 +86,13 @@ static int new_host_task(struct task_struct **task)
 
 	snprintf((*task)->comm, sizeof((*task)->comm), "host%d", host_task_id);
 
+	LKL_TRACE("allocated (task=%p/%s) pid=%i\n", *task, (*task)->comm, pid);
+
 	return 0;
 }
 static void exit_task(void)
 {
+	LKL_TRACE("enter\n");
 	do_exit(0);
 }
 
@@ -99,39 +101,92 @@ static void del_host_task(void *arg)
 	struct task_struct *task = (struct task_struct *)arg;
 	struct thread_info *ti = task_thread_info(task);
 
-	if (lkl_cpu_get() < 0)
+	LKL_TRACE("enter (task=%p/%s ti=%p)\n", task, task->comm, ti);
+
+	if (lkl_cpu_get() < 0) {
+		LKL_TRACE("could not get CPU\n");
 		return;
+	}
 
 	switch_to_host_task(task);
 	host_task_id--;
 	set_ti_thread_flag(ti, TIF_SCHED_JB);
+	set_ti_thread_flag(ti, TIF_NO_TERMINATION);
+
 	lkl_ops->jmp_buf_set(&ti->sched_jb, exit_task);
 }
 
 static struct lkl_tls_key *task_key;
+
+/* Use this to record an ongoing LKL shutdown */
+_Atomic(bool) lkl_shutdown = false;
 
 long lkl_syscall(long no, long *params)
 {
 	struct task_struct *task = host0;
 	long ret;
 
+	LKL_TRACE(
+		"enter (no=%li current=%s host0->TIF host0->TIF_SIGPENDING=%i)\n",
+		no, current->comm, test_tsk_thread_flag(task, TIF_HOST_THREAD),
+		test_tsk_thread_flag(task, TIF_SIGPENDING));
+
 	ret = lkl_cpu_get();
-	if (ret < 0)
+	if (ret < 0) {
+
+		/*
+		 * If we fail to get the LKL CPU here with an error, it likely indicates that we are
+		 * shutting down, and we can no longer handle syscalls. Since this will never
+		 * succeed, exit the current thread.
+		 */
+
+		task = lkl_ops->tls_get(task_key);
+		LKL_TRACE(
+			"lkl_cpu_get() failed -- bailing (no=%li ret=%li task=%s host0=%p host_task_id=%i)\n",
+			no, ret, task ? task->comm : "NULL", host0,
+			host_task_id);
+
+		lkl_ops->thread_exit();
+
+		/* This should not return. */
+		BUG();
 		return ret;
+	}
 
 	if (lkl_ops->tls_get) {
 		task = lkl_ops->tls_get(task_key);
 		if (!task) {
 			ret = new_host_task(&task);
-			if (ret)
+			if (ret) {
+				LKL_TRACE("new_host_task() failed (ret=%li)\n", ret);
 				goto out;
+			}
 			lkl_ops->tls_set(task_key, task);
 		}
 	}
 
+	LKL_TRACE("switching to host task (no=%li task=%s current=%s)\n", no,
+		  task->comm, current->comm);
+
 	switch_to_host_task(task);
 
+	LKL_TRACE("calling run_syscall() (no=%li task=%s current=%s)\n", no,
+		  task->comm, current->comm);
+
 	ret = run_syscall(no, params);
+
+	LKL_TRACE("returned from run_syscall() (no=%li task=%s current=%s)\n",
+		  no, task->comm, current->comm);
+
+	task_work_run();
+
+	/*
+	 * Stop signal handling when LKL is shutting down. We cannot deliver
+	 * signals because we are shutting down the kernel.
+	 */
+	if (!lkl_shutdown) {
+		do_signal(NULL);
+	}
 
 	if (no == __NR_reboot) {
 		thread_sched_jb();
@@ -140,6 +195,9 @@ long lkl_syscall(long no, long *params)
 
 out:
 	lkl_cpu_put();
+
+	LKL_TRACE("done (no=%li task=%s current=%s ret=%i)\n", no,
+		  task ? task->comm : "NULL", current->comm, ret);
 
 	return ret;
 }
@@ -156,6 +214,8 @@ void wakeup_idle_host_task(void)
 static int idle_host_task_loop(void *unused)
 {
 	struct thread_info *ti = task_thread_info(current);
+
+	LKL_TRACE("enter\n");
 
 	snprintf(current->comm, sizeof(current->comm), "idle_host_task");
 	set_thread_flag(TIF_HOST_THREAD);
@@ -174,7 +234,9 @@ static int idle_host_task_loop(void *unused)
 
 int syscalls_init(void)
 {
-	snprintf(current->comm, sizeof(current->comm), "host0");
+	LKL_TRACE("enter\n");
+
+	snprintf(current->comm, sizeof(current->comm), "init");
 	set_thread_flag(TIF_HOST_THREAD);
 	host0 = current;
 
@@ -193,8 +255,48 @@ int syscalls_init(void)
 	return 0;
 }
 
+/*
+ * This function create a new kernel task, host0, which acts as the parent
+ * for all dynamically created hosts tasks when handling syscalls. It does
+ * not inherit the pid from init, and therefore can receive arbitrary
+ * signals.
+ *
+ * The function must be called from a context that holds the LKL CPU lock.
+ *
+ */
+int host0_init(void)
+{
+	pid_t pid;
+	struct task_struct* task;
+
+	LKL_TRACE("enter()\n");
+
+	/* Clone host task with new pid */
+	pid = kernel_thread(host_task_stub, NULL, CLONE_FLAGS & ~CLONE_THREAD);
+	if (pid < 0) {
+		LKL_TRACE("kernel_thread(host0) failed (pid=%i)\n", pid);
+		return pid;
+	}
+
+	rcu_read_lock();
+	task = find_task_by_pid_ns(pid, &init_pid_ns);
+	rcu_read_unlock();
+
+	switch_to_host_task(task);
+
+	snprintf(task->comm, sizeof(task->comm), "host0");
+	set_thread_flag(TIF_HOST_THREAD);
+
+	LKL_TRACE("host0 allocated (task=%p/%s) pid=%i\n", task, task->comm, pid);
+
+	host0 = current;
+
+	return 0;
+}
+
 void syscalls_cleanup(void)
 {
+	LKL_TRACE("enter\n");
 	if (idle_host_task) {
 		struct thread_info *ti = task_thread_info(idle_host_task);
 

@@ -42,7 +42,11 @@ void lkl_process_trap(int signr, struct ucontext *uctx)
 {
     struct ksignal ksig;
 
+    LKL_TRACE("enter\n");
+
     while (get_signal(&ksig)) {
+        LKL_TRACE("ksig.sig=", ksig.sig);
+
         /* Handle required signal */
         if(signr == ksig.sig)
         {
@@ -57,9 +61,13 @@ void do_signal(struct pt_regs *regs)
     struct ksignal ksig;
     struct ucontext uc;
 
+    LKL_TRACE("enter\n");
+
     memset(&uc, 0, sizeof(uc));
     initialize_uctx(&uc, regs);
     while (get_signal(&ksig)) {
+        LKL_TRACE("ksig.sig=", ksig.sig);
+
         /* Whee!  Actually deliver the signal.  */
         handle_signal(&ksig, &uc);
     }
