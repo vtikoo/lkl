@@ -17,7 +17,12 @@ static inline void thread_sched_jb(void)
 	}
 }
 
+/* Switches LKL to a given task */
 void switch_to_host_task(struct task_struct *);
+
+/* Returns the task associated with the current lthread */
+struct task_struct* lkl_get_current_task_struct(void);
+
 int host_task_stub(void *unused);
 
 #endif /*  _ASM_LKL_SCHED_H */

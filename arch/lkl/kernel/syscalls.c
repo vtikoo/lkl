@@ -121,6 +121,13 @@ static struct lkl_tls_key *task_key;
 /* Use this to record an ongoing LKL shutdown */
 _Atomic(bool) lkl_shutdown = false;
 
+/* Returns the task_struct associated with the current lthread */
+
+struct task_struct* lkl_get_current_task_struct(void)
+{
+	return lkl_ops->tls_get(task_key);
+}
+
 long lkl_syscall(long no, long *params)
 {
 	struct task_struct *task = host0;
@@ -140,7 +147,7 @@ long lkl_syscall(long no, long *params)
 		 * succeed, exit the current thread.
 		 */
 
-		task = lkl_ops->tls_get(task_key);
+		task = lkl_get_current_task_struct();
 		LKL_TRACE(
 			"lkl_cpu_get() failed -- bailing (no=%li ret=%li task=%s host0=%p host_task_id=%i)\n",
 			no, ret, task ? task->comm : "NULL", host0,
@@ -154,7 +161,7 @@ long lkl_syscall(long no, long *params)
 	}
 
 	if (lkl_ops->tls_get) {
-		task = lkl_ops->tls_get(task_key);
+		task = lkl_get_current_task_struct();
 		if (!task) {
 			ret = new_host_task(&task);
 			if (ret) {
