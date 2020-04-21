@@ -153,7 +153,7 @@ static inline long lkl_sys_chown(const char *path, lkl_uid_t uid, lkl_gid_t gid)
 /**
  * lkl_sys_chmod - wrapper for lkl_sys_fchmodat
  */
-static inline long lkl_sys_chmod(const char *path, mode_t mode)
+static inline long lkl_sys_chmod(const char *path, lkl_mode_t mode)
 {
 	return lkl_sys_fchmodat(LKL_AT_FDCWD, path, mode);
 }
@@ -213,7 +213,7 @@ static inline long lkl_sys_rename(const char *old, const char *new)
 /**
  * lkl_sys_mkdir - wrapper for lkl_sys_mkdirat
  */
-static inline long lkl_sys_mkdir(const char *path, mode_t mode)
+static inline long lkl_sys_mkdir(const char *path, lkl_mode_t mode)
 {
 	return lkl_sys_mkdirat(LKL_AT_FDCWD, path, mode);
 }
@@ -233,7 +233,7 @@ static inline long lkl_sys_rmdir(const char *path)
 /**
  * lkl_sys_mknod - wrapper for lkl_sys_mknodat
  */
-static inline long lkl_sys_mknod(const char *path, mode_t mode, dev_t dev)
+static inline long lkl_sys_mknod(const char *path, lkl_mode_t mode, unsigned dev)
 {
 	return lkl_sys_mknodat(LKL_AT_FDCWD, path, mode, dev);
 }
@@ -279,7 +279,7 @@ static inline long lkl_sys_select(int n, lkl_fd_set *rfds, lkl_fd_set *wfds,
 	long data[2] = { 0, _LKL_NSIG/8 };
 	struct lkl_timespec ts;
 	lkl_time_t extra_secs;
-	const lkl_time_t max_time = ((1ULL<<8)*sizeof(time_t)-1)-1;
+	const lkl_time_t max_time = ((1ULL<<8)*sizeof(lkl_time_t)-1)-1;
 
 	if (tv) {
 		if (tv->tv_sec < 0 || tv->tv_usec < 0)
