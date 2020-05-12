@@ -23,6 +23,7 @@ struct thread_info {
 	lkl_thread_t tid;
 	struct task_struct *prev_sched;
 	unsigned long stackend;
+	void *syscall_ret;
 };
 
 #define INIT_THREAD_INFO(tsk)				\

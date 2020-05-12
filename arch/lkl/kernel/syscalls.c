@@ -116,7 +116,7 @@ static void del_host_task(void *arg)
 	lkl_ops->jmp_buf_set(&ti->sched_jb, exit_task);
 }
 
-static struct lkl_tls_key *task_key;
+struct lkl_tls_key *task_key;
 
 /* Use this to record an ongoing LKL shutdown */
 _Atomic(bool) lkl_shutdown = false;
@@ -126,6 +126,11 @@ _Atomic(bool) lkl_shutdown = false;
 struct task_struct* lkl_get_current_task_struct(void)
 {
 	return lkl_ops->tls_get(task_key);
+}
+
+void lkl_set_current_task_struct(struct task_struct* task)
+{
+	lkl_ops->tls_set(task_key, task);
 }
 
 long lkl_syscall(long no, long *params)
@@ -172,6 +177,7 @@ long lkl_syscall(long no, long *params)
 		}
 	}
 
+	task_thread_info(task)->syscall_ret = __builtin_return_address(0);
 	LKL_TRACE("switching to host task (no=%li task=%s current=%s)\n", no,
 		  task->comm, current->comm);
 
@@ -185,6 +191,7 @@ long lkl_syscall(long no, long *params)
 	LKL_TRACE("returned from run_syscall() (no=%li task=%s current=%s)\n",
 		  no, task->comm, current->comm);
 
+	task_thread_info(task)->syscall_ret = 0;
 	task_work_run();
 
 	/*

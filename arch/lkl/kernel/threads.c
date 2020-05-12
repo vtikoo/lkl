@@ -221,7 +221,7 @@ struct thread_bootstrap_arg {
 	void *arg;
 };
 
-static void thread_bootstrap(void *_tba)
+static void kernel_thread_bootstrap(void *_tba)
 {
 	LKL_TRACE("enter\n");
 
@@ -252,6 +252,13 @@ int copy_thread(unsigned long clone_flags, unsigned long esp,
 		return 0;
 	}
 
+	void *pc = task_thread_info(current)->syscall_ret;
+	if (pc && !(p->flags & PF_KTHREAD)) {
+		set_ti_thread_flag(ti, TIF_HOST_THREAD);
+		ti->tid = lkl_ops->thread_create_host(pc, (void*)esp, NULL /* FIXME */, task_key, p);
+		return (ti->tid == 0) ? -EINVAL : 0;
+	}
+
 	tba = kmalloc(sizeof(*tba), GFP_KERNEL);
 	if (!tba)
 		return -ENOMEM;
@@ -260,7 +267,7 @@ int copy_thread(unsigned long clone_flags, unsigned long esp,
 	tba->arg = (void *)unused;
 	tba->ti = ti;
 
-	ti->tid = lkl_ops->thread_create(thread_bootstrap, tba);
+	ti->tid = lkl_ops->thread_create(kernel_thread_bootstrap, tba);
 	if (!ti->tid) {
 		kfree(tba);
 		return -ENOMEM;
