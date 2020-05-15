@@ -208,6 +208,16 @@ long lkl_syscall(long no, long *params)
 	}
 
 out:
+	// If we have created a new host task, make sure that it isn't on the
+	// scheduler queue when we return.
+	if (task_thread_info(task)->cloned_child)
+	{
+		struct task_struct *child = task_thread_info(task)->cloned_child;
+		task_thread_info(task)->cloned_child = NULL;
+		switch_to_host_task(child);
+		child->state = TASK_UNINTERRUPTIBLE;
+		switch_to_host_task(task);
+	}
 	lkl_cpu_put();
 
 	LKL_TRACE("done (no=%li task=%s current=%s ret=%i)\n", no,

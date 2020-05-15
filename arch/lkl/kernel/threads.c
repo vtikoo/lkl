@@ -76,6 +76,16 @@ static void kill_thread(struct thread_info *ti)
 	} else {
 
 		/*
+		 * If this is a thread created by clone, then we need to clear the
+		 * clone marker but not free anything yet.  We will get a second call
+		 * into this function when the host thread exits.
+		 */
+		if (test_ti_thread_flag(ti, TIF_CLONED_HOST_THREAD)) {
+			clear_ti_thread_flag(ti, TIF_CLONED_HOST_THREAD);
+			ti->dead = true;
+			return;
+		}
+		/*
 		 * Check if the host thread was killed due to its deallocation when
 		 * the associated application thread terminated gracefully. If not,
 		 * the thread has terminated due to a SYS_exit or a signal. In this
@@ -254,8 +264,12 @@ int copy_thread(unsigned long clone_flags, unsigned long esp,
 
 	void *pc = task_thread_info(current)->syscall_ret;
 	if (pc && !(p->flags & PF_KTHREAD)) {
+		static unsigned long long clone_count = 0;
 		set_ti_thread_flag(ti, TIF_HOST_THREAD);
+		set_ti_thread_flag(ti, TIF_CLONED_HOST_THREAD);
 		ti->tid = lkl_ops->thread_create_host(pc, (void*)esp, NULL /* FIXME */, task_key, p);
+		snprintf(p->comm, sizeof(p->comm), "host_clone%d", __sync_fetch_and_add(&clone_count, 1));
+		current_thread_info()->cloned_child = p;
 		return (ti->tid == 0) ? -EINVAL : 0;
 	}
 
