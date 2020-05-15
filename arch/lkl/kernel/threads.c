@@ -74,24 +74,24 @@ static void kill_thread(struct thread_info *ti)
 		lkl_ops->sem_up(ti->sched_sem);
 		lkl_ops->thread_join(ti->tid);
 	} else {
-
 		/*
-		 * If this is a thread created by clone, then we need to clear the
-		 * clone marker but not free anything yet.  We will get a second call
-		 * into this function when the host thread exits.
+		 * If this is a task backing a host thread created by clone, then we
+		 * need to destroy the associated host thread, but not exit LKL.
 		 */
 		if (test_ti_thread_flag(ti, TIF_CLONED_HOST_THREAD)) {
 			clear_ti_thread_flag(ti, TIF_CLONED_HOST_THREAD);
 			ti->dead = true;
-			return;
-		}
+			if (lkl_ops->thread_destroy_host) {
+				lkl_ops->thread_destroy_host(ti->tid, task_key);
+				ti->tid = 0;
+			}
 		/*
 		 * Check if the host thread was killed due to its deallocation when
 		 * the associated application thread terminated gracefully. If not,
 		 * the thread has terminated due to a SYS_exit or a signal. In this
 		 * case, we need to notify the host to initiate an LKL shutdown.
 		 */
-		if (!test_ti_thread_flag(ti, TIF_NO_TERMINATION)) {
+		} else if (!test_ti_thread_flag(ti, TIF_NO_TERMINATION)) {
 			int exit_code = task->exit_code;
 			int exit_status = exit_code >> 8;
 			int received_signal = exit_code & 255;

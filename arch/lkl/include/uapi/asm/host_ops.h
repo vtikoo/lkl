@@ -60,6 +60,9 @@ struct ucontext;
  * and initialises its register set to the provided program counter, stack
  * pointer, and TLS area; returns a thread handle or 0 if the thread could not
  * be created
+ * @thread_destroy_host - destroys the state associated with a host thread that
+ * has exited via an exit system call.  The task_key argument is the TLS
+ * variable containing the task.  The destructor for this must not be run.
  * @thread_detach - on POSIX systems, free up resources held by
  * pthreads. Noop on Win32.
  * @thread_exit - terminates the current thread
@@ -125,6 +128,8 @@ struct lkl_host_operations {
 	lkl_thread_t (*thread_create)(void (*f)(void *), void *arg);
 	lkl_thread_t (*thread_create_host)(void* pc, void* sp, void* tls,
 			struct lkl_tls_key* task_key, void* task_value);
+	void (*thread_destroy_host)(lkl_thread_t tid, struct lkl_tls_key*
+			task_key);
 
 	void (*thread_detach)(void);
 	void (*thread_exit)(void);
