@@ -231,7 +231,7 @@ struct thread_bootstrap_arg {
 	void *arg;
 };
 
-static void kernel_thread_bootstrap(void *_tba)
+static void thread_bootstrap(void *_tba)
 {
 	LKL_TRACE("enter\n");
 
@@ -281,7 +281,7 @@ int copy_thread(unsigned long clone_flags, unsigned long esp,
 	tba->arg = (void *)unused;
 	tba->ti = ti;
 
-	ti->tid = lkl_ops->thread_create(kernel_thread_bootstrap, tba);
+	ti->tid = lkl_ops->thread_create(thread_bootstrap, tba);
 	if (!ti->tid) {
 		kfree(tba);
 		return -ENOMEM;
