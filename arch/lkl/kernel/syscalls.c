@@ -213,7 +213,6 @@ long lkl_syscall(long no, long *params)
 		return ret;
 	}
 
-out:
 	/*
 	 * If we have created a new host task, make sure that it isn't on the
 	 * scheduler queue when we return.  LKL expects that the only tasks driven
@@ -239,6 +238,7 @@ out:
 		/* Switch back to the calling task before we return. */
 		switch_to_host_task(task);
 	}
+out:
 	lkl_cpu_put();
 
 	LKL_TRACE("done (no=%li task=%s current=%s ret=%i)\n", no,
