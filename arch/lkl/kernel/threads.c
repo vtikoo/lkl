@@ -19,6 +19,7 @@ static int init_ti(struct thread_info *ti)
 	ti->dead = false;
 	ti->prev_sched = NULL;
 	ti->tid = 0;
+	ti->cloned_child = NULL;
 
 	return 0;
 }

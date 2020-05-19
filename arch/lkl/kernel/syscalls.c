@@ -201,19 +201,6 @@ long lkl_syscall(long no, long *params)
 	task_work_run();
 
 	/*
-	 * Stop signal handling when LKL is shutting down. We cannot deliver
-	 * signals because we are shutting down the kernel.
-	 */
-	if (!lkl_shutdown) {
-		do_signal(NULL);
-	}
-
-	if (no == __NR_reboot) {
-		thread_sched_jb();
-		return ret;
-	}
-
-	/*
 	 * If we have created a new host task, make sure that it isn't on the
 	 * scheduler queue when we return.  LKL expects that the only tasks driven
 	 * by the Linux scheduler are kernel threads.  If releasing the CPU lock
@@ -238,6 +225,20 @@ long lkl_syscall(long no, long *params)
 		/* Switch back to the calling task before we return. */
 		switch_to_host_task(task);
 	}
+
+	/*
+	 * Stop signal handling when LKL is shutting down. We cannot deliver
+	 * signals because we are shutting down the kernel.
+	 */
+	if (!lkl_shutdown) {
+		do_signal(NULL);
+	}
+
+	if (no == __NR_reboot) {
+		thread_sched_jb();
+		return ret;
+	}
+
 out:
 	lkl_cpu_put();
 
