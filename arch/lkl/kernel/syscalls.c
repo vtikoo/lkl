@@ -149,6 +149,8 @@ long lkl_syscall(long no, long *params)
 		 */
 
 		task = lkl_get_current_task_struct();
+		lkl_printf("lkl_cpu_get() failed  -- bailing\n");
+
 		LKL_TRACE(
 			"lkl_cpu_get() failed -- bailing (no=%li ret=%li task=%s host0=%p host_task_id=%i)\n",
 			no, ret, task ? task->comm : "NULL", host0,
