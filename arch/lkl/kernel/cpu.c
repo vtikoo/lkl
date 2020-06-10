@@ -98,11 +98,17 @@ int lkl_cpu_get(void)
 
 	ret = __cpu_try_get_lock(1);
 
+	//if (ret == 0)
+	//	cpu.sleepers++;
+
 	while (ret == 0) {
 		cpu.sleepers++;
 		__cpu_try_get_unlock(ret, 0);
 		lkl_ops->sem_down(cpu.sem);
 		ret = __cpu_try_get_lock(0);
+		cpu.sleepers--;
+		if (ret == 0)
+			lkl_printf("here we go again...\n");
 	}
 
 	__cpu_try_get_unlock(ret, 1);
@@ -140,7 +146,7 @@ void lkl_cpu_put(void)
 	}
 
 	if (cpu.sleepers) {
-		cpu.sleepers--;
+		//cpu.sleepers--;
 		lkl_ops->sem_up(cpu.sem);
 	}
 
@@ -194,8 +200,10 @@ void arch_cpu_idle(void)
 	if (cpu.shutdown_gate >= MAX_THREADS) {
 
 		lkl_ops->mutex_lock(cpu.lock);
-		while (cpu.sleepers--)
+		while (cpu.sleepers--) {
+			lkl_printf("sleepers loop in arch_cpu_idle\n");
 			lkl_ops->sem_up(cpu.sem);
+		}
 		lkl_ops->mutex_unlock(cpu.lock);
 
 		lkl_cpu_cleanup(true);
