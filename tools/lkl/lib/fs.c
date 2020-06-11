@@ -273,8 +273,11 @@ long lkl_umount_timeout(char *path, int flags, long timeout_ms)
 	long err;
 
 	do {
+		lkl_printf("before lkl_sys_umount %s\n", path);
 		err = lkl_sys_umount(path, flags);
+		lkl_printf("after lkl_sys_umount %s\n", path);
 		if (err == -LKL_EBUSY) {
+			lkl_printf("before sleep waiting umount %s\n", path);
 			lkl_sys_nanosleep((struct __lkl__kernel_timespec *)&ts,
 					  NULL);
 			timeout_ms -= incr / 1000000;
