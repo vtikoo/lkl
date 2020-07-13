@@ -83,8 +83,8 @@ static void kill_thread(struct thread_info *ti)
 			clear_ti_thread_flag(ti, TIF_CLONED_HOST_THREAD);
 			ti->dead = true;
 			BUG_ON(!lkl_ops->thread_destroy_host);
-			lkl_ops->thread_destroy_host(ti->tid, task_key);
-			ti->tid = 0;
+			lkl_ops->thread_destroy_host(ti->lthread_self_tid, task_key);
+			ti->tid = ti->lthread_self_tid = 0;
 		/*
 		 * Check if the host thread was killed due to its deallocation when
 		 * the associated application thread terminated gracefully. If not,
@@ -279,7 +279,7 @@ int copy_thread_tls(unsigned long clone_flags, unsigned long esp,
 			static unsigned long long clone_count = 0;
 			set_ti_thread_flag(ti, TIF_HOST_THREAD);
 			set_ti_thread_flag(ti, TIF_CLONED_HOST_THREAD);
-			ti->tid = lkl_ops->thread_create_host(pc, (void*)esp, (void*)tls, task_key, p);
+			ti->tid = ti->lthread_self_tid = lkl_ops->thread_create_host(pc, (void*)esp, (void*)tls, task_key, p);
 			snprintf(p->comm, sizeof(p->comm), "host_clone%llu", __sync_fetch_and_add(&clone_count, 1));
 			current_thread_info()->cloned_child = p;
 			return (ti->tid == 0) ? -ENOMEM : 0;

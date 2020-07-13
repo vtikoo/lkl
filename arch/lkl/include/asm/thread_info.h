@@ -21,6 +21,7 @@ struct thread_info {
 	struct lkl_jmp_buf sched_jb;
 	bool dead;
 	lkl_thread_t tid;
+	lkl_thread_t lthread_self_tid;
 	struct task_struct *prev_sched;
 	unsigned long stackend;
 	/* The return address from the currently executing syscall. Invalid when
