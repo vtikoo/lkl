@@ -215,13 +215,38 @@ long lkl_syscall(long no, long *params)
 	if (ti->cloned_child)
 	{
 		struct task_struct *child = ti->cloned_child;
+		struct thread_info *child_ti = task_thread_info(child);
+		/*
+		 * Calling `switch_to_host_task` will set the child task's
+		 * `tid` field to the current host thread. This is normally
+		 * what we want (binding the task to the thread that enters the
+		 * syscall) but in this case it will result in two tasks
+		 * pointing to the same thread.  This is normally fine because
+		 * the field will be reset to the correct value on the next
+		 * syscall. If; however, LKL shuts down before the child thread
+		 * makes a syscall, the thread will be freed twice.  We need to
+		 * make sure that `child->tid` has the correct value on return
+		 * from this function, so we cache the (correct) current value
+		 * and reset it at the end.
+		 */
+		lkl_thread_t child_tid = child_ti->tid;
 		ti->cloned_child = NULL;
 		/*
-		 * We can't change the scheduler state of a task that isn't running, so
-		 * switch to the task and then mark it as uninteruptible.
+		 * We can't change the scheduler state of a task that isn't
+		 * running, so switch to the task and then mark it as
+		 * uninteruptible.
 		 */
 		switch_to_host_task(child);
 		child->state = TASK_UNINTERRUPTIBLE;
+		/*
+		 * Reset the host thread associated with the task child before
+		 * scheduling task. In current LKL, it is safe to do this after
+		 * the switch call, but that will not be the case if LKL gains
+		 * SMP kernel support.  Doing it this way around should ensure
+		 * that the task cannot reenter the kernel until we switch away
+		 * from it.
+		 */
+		child_ti->tid = child_tid;
 		/* Switch back to the calling task before we return. */
 		switch_to_host_task(task);
 	}
