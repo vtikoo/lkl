@@ -167,11 +167,13 @@ struct task_struct *__switch_to(struct task_struct *prev,
 		clear_ti_thread_flag(_prev, TIF_SCHED_JB);
 		_prev_jb = _prev->sched_jb;
 	}
-
+	LKL_TRACE("wake up sem=%p\n", _next->sched_sem);
 	lkl_ops->sem_up(_next->sched_sem);
 	if (test_bit(TIF_SCHED_JB, &_prev_flags)) {
+		LKL_TRACE("longjmp back to task\n");
 		lkl_ops->jmp_buf_longjmp(&_prev_jb, 1);
 	} else {
+		LKL_TRACE("down sem=%p\n", _prev->sched_sem);
 		lkl_ops->sem_down(_prev->sched_sem);
 	}
 

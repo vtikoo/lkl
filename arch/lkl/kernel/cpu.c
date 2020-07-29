@@ -132,7 +132,11 @@ void lkl_cpu_put(void)
 		if (in_interrupt())
 			lkl_bug("%s: in interrupt\n", __func__);
 		lkl_ops->mutex_unlock(cpu.lock);
+		LKL_TRACE("calling sched_jb from %p\n",
+			 current_thread_info()->tid);
 		thread_sched_jb();
+		LKL_TRACE("back from sched_jb from %p\n",
+			 current_thread_info()->tid);
 		return;
 	}
 
