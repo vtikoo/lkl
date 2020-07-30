@@ -7,9 +7,21 @@
  */
 
 #ifdef LKL_DEBUG
+#define LKL_TRACE_W_TID2(x, ...) \
+    lkl_printf("[[    LKL   ]] [tid=%d] %s(): " x, _get_lthread_id(), __func__, ##__VA_ARGS__);
+#define LKL_TRACE_W_TID(x, ...) \
+    lkl_printf("[[    LKL   ]] [tid=%d] %s(): " x, lkl_ops->get_lthread_id(), __func__, ##__VA_ARGS__);
 #define LKL_TRACE(x, ...) \
     lkl_printf("[[    LKL   ]] %s(): " x, __func__, ##__VA_ARGS__);
 #else
+#define LKL_TRACE_W_TID2(...) \
+    do                 \
+    {                  \
+    } while (0)
+#define LKL_TRACE_W_TID(...) \
+    do                 \
+    {                  \
+    } while (0)
 #define LKL_TRACE(...) \
     do                 \
     {                  \
@@ -159,6 +171,8 @@ struct lkl_host_operations {
 
 	void (*jmp_buf_set)(struct lkl_jmp_buf *jmpb, void (*f)(void));
 	void (*jmp_buf_longjmp)(struct lkl_jmp_buf *jmpb, int val);
+
+	int (*get_lthread_id)(void);
 };
 
 /**

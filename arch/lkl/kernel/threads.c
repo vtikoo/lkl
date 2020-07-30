@@ -10,7 +10,7 @@ extern _Atomic(bool) lkl_shutdown;
 
 static int init_ti(struct thread_info *ti)
 {
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 
 	ti->sched_sem = lkl_ops->sem_alloc(0);
 	if (!ti->sched_sem)
@@ -28,7 +28,7 @@ unsigned long *alloc_thread_stack_node(struct task_struct *task, int node)
 {
 	struct thread_info *ti;
 
-	LKL_TRACE("enter (task=%s node=%i)\n", task->comm, node);
+	LKL_TRACE_W_TID("enter (task=%s node=%i)\n", task->comm, node);
 
 	ti = kmalloc(sizeof(*ti), GFP_KERNEL);
 	if (!ti)
@@ -53,7 +53,7 @@ void setup_thread_stack(struct task_struct *p, struct task_struct *org)
 	struct thread_info *ti = task_thread_info(p);
 	struct thread_info *org_ti = task_thread_info(org);
 
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 
 	ti->flags = org_ti->flags;
 	ti->preempt_count = org_ti->preempt_count;
@@ -64,7 +64,7 @@ static void kill_thread(struct thread_info *ti)
 {
 	struct task_struct *task = ti->task;
 
-	LKL_TRACE("enter (task=%s task->state=%i task->flags=%i"
+	LKL_TRACE_W_TID("enter (task=%s task->state=%i task->flags=%i"
 		  "ti=%p ti->flags=%i ti->TIF_NO_TERMINATION=%i )\n",
 		  task->comm, task->state, task->flags, ti, ti->flags,
 		  test_ti_thread_flag(ti, TIF_NO_TERMINATION));
@@ -97,7 +97,7 @@ static void kill_thread(struct thread_info *ti)
 			int received_signal = exit_code & 255;
 			int exit_signal = task->exit_signal;
 
-			LKL_TRACE(
+			LKL_TRACE_W_TID(
 				"terminating LKL (exit_state=%i exit_code=%i exit_signal=%i exit_status=%i "
 				"received_signal=%i ti->dead=%i task->pid=%i "
 				"task->tgid=%i ti->TIF_SCHED_JB=%i ti->TIF_SIGPENDING=%i)\n",
@@ -122,7 +122,7 @@ void free_thread_stack(struct task_struct *tsk)
 {
 	struct thread_info *ti = task_thread_info(tsk);
 
-	LKL_TRACE(
+	LKL_TRACE_W_TID(
 		"enter (task=%s task->TIF_HOST_THREAD=%i task->TIF_SIGPENDING=%i ti=%p current=%s)\n",
 		tsk->comm, test_tsk_thread_flag(tsk, TIF_HOST_THREAD),
 		test_tsk_thread_flag(tsk, TIF_SIGPENDING), ti, current->comm);
@@ -153,7 +153,7 @@ struct task_struct *__switch_to(struct task_struct *prev,
 	unsigned long _prev_flags = _prev->flags;
 	struct lkl_jmp_buf _prev_jb;
 
-	LKL_TRACE("%s=>%s\n", prev->comm, next->comm);
+	LKL_TRACE_W_TID("%s=>%s\n", prev->comm, next->comm);
 
 	_current_thread_info = task_thread_info(next);
 	_next->prev_sched = prev;
@@ -167,13 +167,13 @@ struct task_struct *__switch_to(struct task_struct *prev,
 		clear_ti_thread_flag(_prev, TIF_SCHED_JB);
 		_prev_jb = _prev->sched_jb;
 	}
-	LKL_TRACE("wake up sem=%p\n", _next->sched_sem);
+	LKL_TRACE_W_TID("wake up sem=%p\n", _next->sched_sem);
 	lkl_ops->sem_up(_next->sched_sem);
 	if (test_bit(TIF_SCHED_JB, &_prev_flags)) {
-		LKL_TRACE("longjmp back to task\n");
+		LKL_TRACE_W_TID("longjmp back to task\n");
 		lkl_ops->jmp_buf_longjmp(&_prev_jb, 1);
 	} else {
-		LKL_TRACE("down sem=%p\n", _prev->sched_sem);
+		LKL_TRACE_W_TID("down sem=%p\n", _prev->sched_sem);
 		lkl_ops->sem_down(_prev->sched_sem);
 	}
 
@@ -185,13 +185,13 @@ struct task_struct *__switch_to(struct task_struct *prev,
 
 int host_task_stub(void *unused)
 {
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 	return 0;
 }
 
 void switch_to_host_task(struct task_struct *task)
 {
-	LKL_TRACE(
+	LKL_TRACE_W_TID(
 		"enter (task=%s current=%s task->TIF_HOST_THREAD=%i task->TIF_SIGPENDING=%i)\n",
 		task->comm, current->comm,
 		test_tsk_thread_flag(task, TIF_HOST_THREAD),
@@ -208,19 +208,19 @@ void switch_to_host_task(struct task_struct *task)
 	wake_up_process(task);
 	thread_sched_jb();
 
-	LKL_TRACE(
+	LKL_TRACE_W_TID(
 		"calling sem_down (task=%s task->TIF_HOST_THREAD=%i task->TIF_SIGPENDING=%i)\n",
 		task->comm, test_tsk_thread_flag(task, TIF_HOST_THREAD),
 		test_tsk_thread_flag(task, TIF_SIGPENDING));
 	lkl_ops->sem_down(task_thread_info(task)->sched_sem);
 
-	LKL_TRACE(
+	LKL_TRACE_W_TID(
 		"calling schedule_tail (task=%s task->TIF_HOST_THREAD=%i task->TIF_SIGPENDING=%i abs_prev=%s)\n",
 		task->comm, test_tsk_thread_flag(task, TIF_HOST_THREAD),
 		test_tsk_thread_flag(task, TIF_SIGPENDING), abs_prev->comm);
 	schedule_tail(abs_prev);
 
-	LKL_TRACE(
+	LKL_TRACE_W_TID(
 		"done (task=%s current=%s task->TIF_HOST_THREAD=%i task->TIF_SIGPENDING=%i)\n",
 		task->comm, current->comm,
 		test_tsk_thread_flag(task, TIF_HOST_THREAD),
@@ -235,7 +235,7 @@ struct thread_bootstrap_arg {
 
 static void thread_bootstrap(void *_tba)
 {
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 
 	struct thread_bootstrap_arg *tba = (struct thread_bootstrap_arg *)_tba;
 	struct thread_info *ti = tba->ti;
@@ -254,7 +254,7 @@ static void thread_bootstrap(void *_tba)
 int copy_thread_tls(unsigned long clone_flags, unsigned long esp,
 		unsigned long unused, struct task_struct *p, unsigned long tls)
 {
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 
 	struct thread_info *ti = task_thread_info(p);
 	struct thread_bootstrap_arg *tba;
@@ -308,7 +308,7 @@ int copy_thread_tls(unsigned long clone_flags, unsigned long esp,
 
 void show_stack(struct task_struct *task, unsigned long *esp)
 {
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 }
 
 /**
@@ -320,7 +320,7 @@ void threads_init(void)
 	int ret;
 	struct thread_info *ti = &init_thread_union.thread_info;
 
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 
 	ret = init_ti(ti);
 	if (ret < 0) {
@@ -334,7 +334,7 @@ void threads_cleanup(void)
 {
 	struct task_struct *p, *t;
 
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 
 	for_each_process_thread(p, t) {
 		struct thread_info *ti = task_thread_info(t);

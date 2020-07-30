@@ -74,7 +74,7 @@ static int new_host_task(struct task_struct **task)
 
 	pid = kernel_thread(host_task_stub, NULL, CLONE_FLAGS);
 	if (pid < 0) {
-		LKL_TRACE("kernel_thread() failed (pid=%i)\n", pid);
+		LKL_TRACE_W_TID("kernel_thread() failed (pid=%i)\n", pid);
 		return pid;
 	}
 
@@ -86,13 +86,13 @@ static int new_host_task(struct task_struct **task)
 
 	snprintf((*task)->comm, sizeof((*task)->comm), "host%d", host_task_id);
 
-	LKL_TRACE("allocated (task=%p/%s) pid=%i\n", *task, (*task)->comm, pid);
+	LKL_TRACE_W_TID("allocated (task=%p/%s) pid=%i\n", *task, (*task)->comm, pid);
 
 	return 0;
 }
 static void exit_task(void)
 {
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 	do_exit(0);
 }
 
@@ -101,10 +101,10 @@ static void del_host_task(void *arg)
 	struct task_struct *task = (struct task_struct *)arg;
 	struct thread_info *ti = task_thread_info(task);
 
-	LKL_TRACE("enter (task=%p/%s ti=%p)\n", task, task->comm, ti);
+	LKL_TRACE_W_TID("enter (task=%p/%s ti=%p)\n", task, task->comm, ti);
 
 	if (lkl_cpu_get() < 0) {
-		LKL_TRACE("could not get CPU\n");
+		LKL_TRACE_W_TID("could not get CPU\n");
 		return;
 	}
 
@@ -134,7 +134,7 @@ long lkl_syscall(long no, long *params)
 	struct thread_info *ti;
 	long ret;
 
-	LKL_TRACE(
+	LKL_TRACE_W_TID(
 		"enter (no=%li current=%s host0->TIF host0->TIF_SIGPENDING=%i)\n",
 		no, current->comm, test_tsk_thread_flag(task, TIF_HOST_THREAD),
 		test_tsk_thread_flag(task, TIF_SIGPENDING));
@@ -149,7 +149,7 @@ long lkl_syscall(long no, long *params)
 		 */
 
 		task = lkl_get_current_task_struct();
-		LKL_TRACE(
+		LKL_TRACE_W_TID(
 			"lkl_cpu_get() failed -- bailing (no=%li ret=%li task=%s host0=%p host_task_id=%i)\n",
 			no, ret, task ? task->comm : "NULL", host0,
 			host_task_id);
@@ -166,7 +166,7 @@ long lkl_syscall(long no, long *params)
 		if (!task) {
 			ret = new_host_task(&task);
 			if (ret) {
-				LKL_TRACE("new_host_task() failed (ret=%li)\n", ret);
+				LKL_TRACE_W_TID("new_host_task() failed (ret=%li)\n", ret);
 				goto out;
 			}
 			lkl_ops->tls_set(task_key, task);
@@ -181,17 +181,17 @@ long lkl_syscall(long no, long *params)
 	 */
 	ti->syscall_ret = __builtin_return_address(0);
 
-	LKL_TRACE("switching to host task (no=%li task=%s current=%s)\n", no,
+	LKL_TRACE_W_TID("switching to host task (no=%li task=%s current=%s)\n", no,
 		  task->comm, current->comm);
 
 	switch_to_host_task(task);
 
-	LKL_TRACE("calling run_syscall() (no=%li task=%s current=%s)\n", no,
+	LKL_TRACE_W_TID("calling run_syscall() (no=%li task=%s current=%s)\n", no,
 		  task->comm, current->comm);
 
 	ret = run_syscall(no, params);
 
-	LKL_TRACE("returned from run_syscall() (no=%li task=%s current=%s)\n",
+	LKL_TRACE_W_TID("returned from run_syscall() (no=%li task=%s current=%s)\n",
 		  no, task->comm, current->comm);
 
 	/*
@@ -267,7 +267,7 @@ long lkl_syscall(long no, long *params)
 out:
 	lkl_cpu_put();
 
-	LKL_TRACE("done (no=%li task=%s current=%s ret=%i)\n", no,
+	LKL_TRACE_W_TID("done (no=%li task=%s current=%s ret=%i)\n", no,
 		  task ? task->comm : "NULL", current->comm, ret);
 
 	return ret;
@@ -286,7 +286,7 @@ static int idle_host_task_loop(void *unused)
 {
 	struct thread_info *ti = task_thread_info(current);
 
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 
 	snprintf(current->comm, sizeof(current->comm), "idle_host_task");
 	set_thread_flag(TIF_HOST_THREAD);
@@ -305,7 +305,7 @@ static int idle_host_task_loop(void *unused)
 
 int syscalls_init(void)
 {
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 
 	snprintf(current->comm, sizeof(current->comm), "init");
 	set_thread_flag(TIF_HOST_THREAD);
@@ -340,12 +340,12 @@ int host0_init(void)
 	pid_t pid;
 	struct task_struct* task;
 
-	LKL_TRACE("enter()\n");
+	LKL_TRACE_W_TID("enter()\n");
 
 	/* Clone host task with new pid */
 	pid = kernel_thread(host_task_stub, NULL, CLONE_FLAGS & ~CLONE_THREAD);
 	if (pid < 0) {
-		LKL_TRACE("kernel_thread(host0) failed (pid=%i)\n", pid);
+		LKL_TRACE_W_TID("kernel_thread(host0) failed (pid=%i)\n", pid);
 		return pid;
 	}
 
@@ -358,7 +358,7 @@ int host0_init(void)
 	snprintf(task->comm, sizeof(task->comm), "host0");
 	set_thread_flag(TIF_HOST_THREAD);
 
-	LKL_TRACE("host0 allocated (task=%p/%s) pid=%i\n", task, task->comm, pid);
+	LKL_TRACE_W_TID("host0 allocated (task=%p/%s) pid=%i\n", task, task->comm, pid);
 
 	host0 = current;
 
@@ -367,7 +367,7 @@ int host0_init(void)
 
 void syscalls_cleanup(void)
 {
-	LKL_TRACE("enter\n");
+	LKL_TRACE_W_TID("enter\n");
 	if (idle_host_task) {
 		struct thread_info *ti = task_thread_info(idle_host_task);
 
